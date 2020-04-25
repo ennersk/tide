@@ -190,7 +190,10 @@ mod endpoint;
 mod middleware;
 mod request;
 mod response;
+#[cfg(not(feature = "__internal__bench"))]
 mod router;
+#[cfg(feature = "__internal__bench")]
+pub mod router;
 mod server;
 mod utils;
 
