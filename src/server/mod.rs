@@ -295,6 +295,23 @@ impl<State: Send + Sync + 'static> Server<State> {
 
         server.run().await
     }
+
+    fn handle_request(self, req: http_types::Request) -> BoxFuture<'static, crate::Result> {
+        Box::pin(async move {
+            let method = req.method().to_owned();
+            let Selection { endpoint, params } = self.router.route(&req.url().path(), method);
+            let route_params = vec![params];
+            let req = Request::new(self.state.clone(), req, route_params);
+
+            let next = Next {
+                endpoint,
+                next_middleware: &self.middleware,
+            };
+
+            let res = next.run(req).await?;
+            Ok(res)
+        })
+    }
 }
 
 impl<State> Clone for Server<State> {
@@ -330,10 +347,9 @@ impl<State: Sync + Send + 'static> HttpService for Server<State> {
     }
 
     fn respond(&self, _conn: (), req: http_service::Request) -> Self::ResponseFuture {
-        let req = Request::new(self.state.clone(), req, Vec::new());
         let service = self.clone();
         Box::pin(async move {
-            match service.call(req).await {
+            match service.handle_request(req).await {
                 Ok(value) => {
                     let res = value.into();
                     // We assume that if an error was manually cast to a
